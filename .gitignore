@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+.env
+
+# IDE
+.vscode/
+.idea/
+
+# Chroma
+/chroma
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Pytest / coverage (once you add tests)
+.pytest_cache/
+htmlcov/
+.coverage

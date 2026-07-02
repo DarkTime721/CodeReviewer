@@ -1,0 +1,47 @@
+import uuid
+from .state import CodeReviewState
+
+
+def start_node(state: CodeReviewState):
+    task_id = str(uuid.uuid4())
+    return {
+        'id': task_id,
+        'language': None,
+        'agents_required': [],
+        'input': [],
+        'system_map': None,
+        'languages': None,
+        'router_decision': None,
+        'lines_changed': None,
+        'percent_changed': None,
+        'functions_added': [],
+        'functions_deleted': [],
+        'functions_modified': [],
+        'structural_type': None,
+        'input_scanner': [],
+        'explanation': None,
+        'semantic_magnitude': None,
+        'audit_check': [],
+        'coverage': None,
+        'accuracy': None,
+        'severity_weighted': None,
+        'fix_quality': None,
+        'consistency': None,
+        'judge_score': None,
+        'judge_verdict': None,
+        'retry_count': 0,
+        'retry_hints': {},
+        'forced': None,
+        'strict_judge': False,
+        'previously_found': None,
+        'past_findings': {},
+        'resolved_since_last': None,
+        'trend' : None,
+        'cross_file_findings': None,
+        'unresolved_imports': None,
+        'findings': [],
+        'output_json': None,
+        'output_diff': None,
+        'output_markdown': None,
+        'final_findings': None
+    }
