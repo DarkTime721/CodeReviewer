@@ -115,6 +115,7 @@ Dockerfile
 - [x] Core multi-agent review pipeline
 - [x] Cross-file taint tracing
 - [x] Docker containerization
+- [ ] Integration GitHub PR API to automatically fetch pull request code changes, eliminating manual file copying and simplifying code retrieval for automated code review.
 - [ ] **MCP server** — expose `review_pr` and `check_cross_file_taint` as MCP tools so the reviewer can be called from any MCP client (Claude Desktop, IDEs, other agents), plus a GitHub Action for automatic PR review
 - [ ] **Frontend** — lightweight UI for submitting diffs and viewing streamed review output
 - [ ] QLoRA fine-tuning exploration
