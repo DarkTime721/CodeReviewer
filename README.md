@@ -15,24 +15,36 @@ Fully containerized with Docker, with observability via LangSmith and persistent
 - **Multi-provider LLM support** — works with local models via Ollama (Llama, Qwen, Gemma, and others) or hosted providers (OpenAI, Groq)
 ## Architecture
  
-```
-diff_parser → ast_parser → task_classifier → confidence_router
-                                                    │
-                        ┌───────────────┬───────────┴───────────┬───────────────┐
-                        ▼               ▼                       ▼               ▼
-                   bug_agent    security_agent            quality_agent   performance_agent
-                        │               │                       │               │
-                        └───────────────┴───────────┬───────────┴───────────────┘
-                                                      ▼
-                                          cross_file_taint_tracer
-                                                      ▼
-                                                 aggregator
-                                                      ▼
-                                                   judge  ──── RETRY ──→ (back to agents)
-                                                      │
-                                                   PASS / FORCE_OUTPUT
-                                                      ▼
-                                              output_formatter
+```mermaid
+flowchart TD
+    START([START]) --> start
+    start --> diff_parser
+    diff_parser --> ast_parser
+    ast_parser --> memory_reader
+    memory_reader --> cross_taint["cross-taint"]
+    cross_taint --> task_classifier
+    task_classifier --> agent_dispatcher
+
+    agent_dispatcher -.->|confidence_router| bug_agent
+    agent_dispatcher -.->|confidence_router| security_agent
+    agent_dispatcher -.->|confidence_router| quality_agent
+    agent_dispatcher -.->|confidence_router| performance_agent
+    agent_dispatcher -.->|confidence_router| trivial_output_node
+
+    bug_agent --> aggregator
+    security_agent --> aggregator
+    quality_agent --> aggregator
+    performance_agent --> aggregator
+
+    aggregator --> judge_agent
+
+    judge_agent -.->|PASS| output_formatter
+    judge_agent -.->|RETRY| agent_dispatcher
+    judge_agent -.->|FORCE_OUTPUT| output_formatter
+
+    trivial_output_node --> memory_writer
+    output_formatter --> memory_writer
+    memory_writer --> END([END])
 ```
  
 Review findings are deduplicated in the aggregator via a composite key, then passed through the judge before final markdown/diff output is generated.
