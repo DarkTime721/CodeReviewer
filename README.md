@@ -3,6 +3,8 @@
 A production-grade, multi-agent AI code review system built with **LangGraph**. It analyzes code diffs for bugs, security vulnerabilities, quality issues, and performance problems — including cross-file security vulnerability tracing — and returns a structured, confidence-scored review.
  
 Fully containerized with Docker, with observability via LangSmith and persistent review memory via ChromaDB.
+
+> **Note:** This README is currently being updated as GitHub Pull Request support is being integrated. Documentation may change over the next few days as new updates are pushed.
  
 ## Features
  
@@ -60,7 +62,66 @@ Review findings are deduplicated in the aggregator via a composite key, then pas
 | Observability | LangSmith |
 | Containerization | Docker, Docker Compose |
  
-## Getting Started
+## GitHub API Setup [Currently in progress — coming soon.]
+
+Code Reviewer fetches PR file contents directly from the GitHub API, so it needs a
+GitHub **personal access token** to authenticate its requests. Without one, requests
+to `/review` will fail immediately with a clear `500 Configuration Error` rather than
+attempting the fetch.
+
+### 1. Generate a token
+
+1. Go to **github.com** → click your profile picture (top right) → **Settings**.
+2. In the left sidebar, scroll to **Developer settings**.
+3. Go to **Personal access tokens → Fine-grained tokens → Generate new token**.
+4. Give it a descriptive name (e.g. `code-reviewer-local`) and an expiration — shorter
+   is safer for a token used in local development.
+5. Under **Repository access**, choose:
+   - **Only select repositories** — pick whichever repos you want Code Reviewer to be
+     able to review, or
+   - **All repositories** — needed if you want to point Code Reviewer at arbitrary
+     public repos, not just your own.
+6. Under **Permissions → Repository permissions**, grant:
+   - **Pull requests: Read-only** — required to list PR files and fetch PR metadata.
+   - **Contents: Read-only** — required to fetch file contents (old/new versions, and
+     any imported files used during cross-file taint tracing).
+7. Click **Generate token** and **copy it immediately** — GitHub only shows the full
+   token once.
+
+### 2. Configure it
+
+Add the token to your `.env` file at the project root:
+
+```
+GITHUB_TOKEN=github_pat_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+If you're running via Docker Compose, make sure this `.env` file is either loaded via
+`env_file:` in `docker-compose.yml` or the variable is passed through under
+`environment:` — otherwise the container won't see it even if it's set on your host.
+
+### 3. Verify it's working
+
+Send a request to `/review` with a real GitHub PR URL and PR number. If the token is
+missing or misconfigured, you'll get:
+
+```json
+{ "detail": "Error: GitHub token is not configured" }
+```
+
+with HTTP status `500`. If the token is present but invalid/expired, you'll instead
+see a `404` with GitHub's own message (e.g. `"Bad credentials"`) — a different error,
+since at that point Code Reviewer did make a request, and GitHub rejected it.
+
+### Notes on rate limits
+
+Authenticated requests get a much higher GitHub API rate limit than unauthenticated
+ones (5,000 requests/hour vs. 60/hour), which matters here since a single PR review
+can trigger several calls — one for the file list, one for PR metadata, and one or two
+per changed file for content, plus additional calls per imported file during cross-file
+taint tracing. If you hit a rate limit anyway, Code Reviewer retries automatically with
+backoff and returns a `503` only if retries are exhausted — no action needed on your
+end beyond waiting.
  
 ### Prerequisites
 - Docker & Docker Compose
