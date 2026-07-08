@@ -3,6 +3,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 from langchain_core.messages import HumanMessage, SystemMessage
 from .state import CodeReviewState, get_input_by_version
+from ..schemas import invoke_with_retry_llm
 
 
 class TaskClassifier(BaseModel):
@@ -17,6 +18,33 @@ class TaskClassifier(BaseModel):
         ...,
         description="One to two sentences explaining why these agennts were selected"
     )
+
+    @field_validator('agents_required', mode='before')
+    @classmethod
+    def filter_invalid_agents(cls, v):
+        valid = {'bug', 'security', 'quality', 'performance'}
+        if v is None:
+            print("TaskClassifier: agents_required missing, defaulting to ['bug']")
+            return ['bug']
+        
+        if isinstance(v, str):
+            v = [v]
+
+        if not isinstance(v, list):
+            print(f"TaskClassifier: invalid agents_required type {type(v)}, defaulting to ['bug']")
+            return ['bug']
+        
+        filtered = [a for a in v if a in valid]
+
+        if not filtered:
+            print(f"TaskClassifier: all agents invalid, got {v}, defaulting to ['bug']")
+            return ['bug']
+        
+        if len(filtered) < len(v):
+            dropped = [a for a in v if a not in valid]
+            print(f"TaskClassifier: dropped invalid agents {dropped}")
+
+        return filtered
     
 
 TASK_CLASSIFIER_PROMPT = """
@@ -53,7 +81,6 @@ Based on the change summary and diff, determine:
    - `security`: entry points, auth, input validation, injection risk
    - `quality`: readability, naming, structure, duplication
    - `performance`: loops, DB calls, caching, complexity
-   - `cross_file`: imports changed, shared utilities modified, interface changes
 
 3. `explanation`: One sentence explaining why these agents were selected.
 
@@ -118,10 +145,13 @@ def task_classifier_node(state: CodeReviewState):
             findings = state['cross_file_findings'] or [],
         )
 
-        result = task_classifier_llm.invoke([
+        result = invoke_with_retry_llm(
+            llm=task_classifier_llm,
+            messages=[
             SystemMessage("You are a code review classifier. Your job is to analyze a code diff and determine which specialist reviewers are needed."),
             HumanMessage(prompt)
-        ])
+            ]
+        )
 
         """agents = result.agents_required
 

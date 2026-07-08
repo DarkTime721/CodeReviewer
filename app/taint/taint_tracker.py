@@ -3,11 +3,43 @@ from pathlib import Path
 from importlib.util import find_spec
 from ..graph.state import CodeReviewState, get_input_by_version
 from .taint_patterns import source_patterns, sink_patterns
+from ..schemas import fetch_with_retry, github_token, GitHubPermanentError, ConfigurationError, GitHubAPIError
+import base64
+from typing import Optional
+
+
+# Function added for fetching the required dependency files (from import) if present
+def fetch_file(url: str):
+    if github_token:
+        headers = {
+            "Authorization": f"Bearer {github_token}",
+            "Accept": "application/vnd.github+json"
+        }
+    else:
+        raise ConfigurationError("GitHub token is not configured")
+    try:
+        data = fetch_with_retry(url=url, headers=headers)
+
+        code = base64.b64decode(
+            data['content']
+        ).decode("utf-8")
+
+        return code
+
+    except GitHubAPIError as e:
+        raise e
+        
 
 
 def obj_and_attrs(node):
     if isinstance(node, ast.Call):
         current = node.func
+
+        # Support standalone function calls so imported function returns can be tracked 
+        # (e.g., data = get_input()) 
+        if isinstance(current, ast.Name):
+            return current.id, []
+        
     elif isinstance(node, ast.Subscript):
         current = node.value
     else:
@@ -105,23 +137,36 @@ def cross_file_tracer_node(state: CodeReviewState) -> dict:
         result = find_source_or_sink((obj_source, attrs_source))
 
         if result['type'] == 'sink':
+
+            arg_names = []
+
             if isinstance(node.args[0], ast.Name):
-                arg_name = node.args[0].id
+                arg_names.append(node.args[0].id)
             elif isinstance(node.args[0], (ast.Call, ast.Subscript)):
                 obj, attrs = obj_and_attrs(node.args[0])
-                arg_name = obj
+                arg_names.append(obj)
+            
+            # Added support for f-string (e.g. os.system(f"search-tool --query {query}") )
+            elif isinstance(node.args[0], ast.JoinedStr):
+                for value in node.args[0].values:
+                    if (
+                        isinstance(value, ast.FormattedValue)
+                        and isinstance(value.value, ast.Name)
+                    ):
+                        arg_names.append(value.value.id)
             else:
                 return
-            if arg_name in tainted_vars:
-                    findings.append({
-                        "sink_file": file_path,
-                        "sink_lineno": node.lineno,
-                        "var_name": arg_name,
-                        "source_file": tainted_vars[arg_name]['origin']["file"],
-                        "source_lineno": tainted_vars[arg_name]['origin']["lineno"],
-                        "source_call": tainted_vars[arg_name]['origin']['obj_and_attrs'],
-                        "score": tainted_vars[arg_name]["score"],
-                    })
+            for arg_name in arg_names:
+                if arg_name in tainted_vars:
+                        findings.append({
+                            "sink_file": file_path,
+                            "sink_lineno": node.lineno,
+                            "var_name": arg_name,
+                            "source_file": tainted_vars[arg_name]['origin']["file"],
+                            "source_lineno": tainted_vars[arg_name]['origin']["lineno"],
+                            "source_call": tainted_vars[arg_name]['origin']['obj_and_attrs'],
+                            "score": tainted_vars[arg_name]["score"],
+                        })
 
     
     def handle_return(node, file_path: Path, function_name: str):
@@ -148,46 +193,123 @@ def cross_file_tracer_node(state: CodeReviewState) -> dict:
                 del function_returns[function_name]
 
 
-    def resolve_module_paths(module: str, from_file: Path):
-        parts = module.split('.')
-        base = Path(from_file).resolve().parent
-        while True:
-            candidate = base.joinpath(*parts).with_suffix('.py')
-            if candidate.exists():
-                return candidate
-            parent = base.parent
-            if parent == base:
-                return Path("None")   # Will always be false
-            base = parent
+    def resolve_module_paths(module: str, from_file: Path, level: int, repo_tree: set[str]) -> Optional[str]:
+        """Resolve an import to a repo-root-relative path string, or None if
+        it can't be found in the repo's tree (likely to be stdlib/third-party)."""
+        parts = module.split('.') if module else []
 
-    def manage_imports(stmt, file_path: Path):
+        if level == 0:
+            # Absolute import: resolved from repo root, not from from_file's directory
+            anchor = Path('.')
+        else:
+            # Relative import: level=1 means "current package" (from_file's own dir),
+            # each additional level climbs one more parent up
+            anchor = Path(from_file).parent
+            for _ in range(level - 1):
+                anchor = anchor.parent
+
+        base = anchor.joinpath(*parts) if parts else anchor
+
+        # Try as a plain module file, then as a package's __init__.py
+        candidate = str(base.with_suffix('.py')).replace('\\', '/').lstrip('./')
+        candidate_init = str(base / '__init__.py').replace('\\', '/').lstrip('./')
+
+        if candidate in repo_tree:
+            return candidate
+        if candidate_init in repo_tree:
+            return candidate_init
+
+        return None  # not found in repo; treaded as stdlib/third-party module
+
+
+    def manage_imports(stmt, file_path: Path, head_sha=state['head_sha']):
         if isinstance(stmt, ast.Import):
             modules = [name.name for name in stmt.names]
             imported_fns = []
+            level = 0
         else:
             modules = [stmt.module]
             imported_fns = [name.name for name in stmt.names]
+            level = stmt.level  # 0 = absolute, 1+ = relative
+
         for module in modules:
-            candidate_path = resolve_module_paths(module, file_path)
-            
-            if candidate_path.exists():
-                with open(candidate_path, 'r') as f:
-                    file = f.read()
-                    tree = ast.parse(file)
+            candidate_str = resolve_module_paths(module, file_path, level, state['repo_tree'])
+
+            if candidate_str is None:
+            # Not found anywhere in the repo tree, stdlib/third-party module considered
+                if not find_spec(module):
+                    unresolved_imports.append({
+                        'module': module,
+                        'imported_fns': imported_fns,
+                        'file': file_path,
+                        'lineno': stmt.lineno,
+                        'error': ''
+                    })
+                continue
+
+            # Checking if files are already fetched as part of this PR, no network call is required
+            local_match = next(
+                (entry for entry in state['input'] if entry['file'] == candidate_str),
+                None
+            )
+
+            if local_match is not None:
+                try:
+                    tree = ast.parse(local_match['content'])
                     for stmt_import in tree.body:
-                        dispatch(stmt_import, candidate_path) 
-            else:
-                if find_spec(module):
-                    continue
-                else:
+                        dispatch(stmt_import, Path(candidate_str))
+                except SyntaxError as e:
                     unresolved_imports.append(
                         {
                             'module': module,
                             'imported_fns': imported_fns,
                             'file': file_path,
-                            'lineno': stmt.lineno
+                            'lineno': stmt.lineno,
+                            'error': f"Invalid syntax:\nFile path: {candidate_str}\nLine no: {e.lineno}"
                         }
                     )
+                continue
+
+            # GitHub integration for fetching the code of the imported file from the repo for taint tracing
+            # If not a part of this PR's diff, trying to fetch it live from GitHub
+            url = f"{state['repo_url_fetch']}/{candidate_str}?ref={head_sha}"
+            try:
+                file = fetch_file(url=url)
+                tree = ast.parse(file)
+                for stmt_import in tree.body:
+                    dispatch(stmt_import, Path(candidate_str))
+                
+            except GitHubAPIError as e:
+                # rate limit exhausted (503 or worthy) or other API error
+
+                unresolved_imports.append(
+                    {
+                        'module': module,
+                        'imported_fns': imported_fns,
+                        'file': file_path,
+                        'lineno': stmt.lineno,
+                        'error': e.args[0]
+                    }
+                )
+                
+            except SyntaxError as e:
+                unresolved_imports.append(
+                    {
+                        'module': module,
+                        'imported_fns': imported_fns,
+                        'file': file_path,
+                        'lineno': stmt.lineno,
+                        'error': f"Invalid syntax:\nFile path: {candidate_str}\nLine no: {e.lineno}"
+                    }
+                )
+
+                '''
+                with open(candidate_path, 'r') as f:
+                    file = f.read()
+                    tree = ast.parse(file)
+                    for stmt_import in tree.body:
+                        dispatch(stmt_import, candidate_path)
+                '''
 
 
     def dispatch(stmt, file_path: Path, function_name= None):
@@ -204,6 +326,14 @@ def cross_file_tracer_node(state: CodeReviewState) -> dict:
                 if isinstance(stmt_body, ast.Return):
                     handle_return(stmt_body, file_path, function_name)
 
+    # AST-parser node has been updated to check if Syntax errors take place
+    # If SyntaxError is present, skip the cross_file_findings
+    if state.get('parse_error'):
+        return {
+        'cross_file_findings': [],
+        'unresolved_imports': []
+    }
+
     new_input = get_input_by_version(state['input'], 'new')
 
     if new_input is None:
@@ -213,7 +343,7 @@ def cross_file_tracer_node(state: CodeReviewState) -> dict:
     tree = ast.parse(code)
     for stmt in tree.body:
         dispatch(stmt, new_input['file'])
-
+        
     return {
         'cross_file_findings': findings,
         'unresolved_imports': unresolved_imports

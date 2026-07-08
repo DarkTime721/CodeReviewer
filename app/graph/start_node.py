@@ -6,6 +6,9 @@ def start_node(state: CodeReviewState):
     task_id = str(uuid.uuid4())
     return {
         'id': task_id,
+        'repo_url_fetch': state.get('repo_url_fetch'),
+        'repo_tree': state.get('repo_tree', None),
+        'head_sha': state.get('head_sha', None),
         'language': None,
         'agents_required': [],
         'input': [],
@@ -37,6 +40,7 @@ def start_node(state: CodeReviewState):
         'past_findings': {},
         'resolved_since_last': None,
         'trend' : None,
+        'parse_error': None,
         'cross_file_findings': None,
         'unresolved_imports': None,
         'findings': [],

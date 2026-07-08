@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from langchain_core.messages import HumanMessage, SystemMessage
 from ..model_factory import get_model
 from .state import CodeReviewState
-
+from ..schemas import invoke_with_retry_llm
 
 class JudgeOutput(BaseModel):
     coverage: float = Field(ge=0.0, le=1.0, description="How well did agents cover all changed functions and lines")
@@ -103,11 +103,14 @@ def judge_node(state: CodeReviewState):
                 default=str
             )
         )
-        
-        result = judge_agent_llm.invoke([
+
+        result = invoke_with_retry_llm(
+            llm=judge_agent_llm,
+            messages=[
             SystemMessage("You are a senior code review judge. Your job is to evaluate the quality of findings produced by specialist agents and score them objectively and return structured findings."),
             HumanMessage(prompt)
-        ])
+            ]
+        )
 
         judge_score = (
           result.coverage * 0.25 +
@@ -128,17 +131,17 @@ def judge_node(state: CodeReviewState):
             judge_verdict = "RETRY"
 
         return {
-            'coverage': result.coverage,
-            'accuracy': result.accuracy,
-            'severity_weighted': result.severity_weighted,
-            'fix_quality': result.fix_quality,
-            'consistency': result.consistency,
-            'retry_hints': result.agent_feedback,
-            'judge_score': judge_score,
-            'judge_verdict': judge_verdict,
-            'retry_count': retry_count,
-            'forced': judge_verdict == 'FORCE_OUTPUT'
-        }
+        'coverage': result.coverage,
+        'accuracy': result.accuracy,
+        'severity_weighted': result.severity_weighted,
+        'fix_quality': result.fix_quality,
+        'consistency': result.consistency,
+        'retry_hints': result.agent_feedback,
+        'judge_score': judge_score,
+        'retry_count': retry_count,
+        'judge_verdict': judge_verdict,
+        'forced': judge_verdict == 'FORCE_OUTPUT'
+    }
 
     except Exception as e:
         print(e)

@@ -11,8 +11,9 @@ def confidence_router(state: CodeReviewState):
     print(agents_required)
     semantic_magnitude = state['semantic_magnitude']
     routes = []
- 
-    if state['semantic_magnitude'] < 0.3:
+
+    # Updated `trivial_output_node` to pass when the state's `parse_error` field is populated.
+    if state['semantic_magnitude']  < 0.3 or state.get('parse_error'):
         return [Send('trivial_output_node', state)]
     
     if semantic_magnitude > 0.8:
