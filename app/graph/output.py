@@ -2,6 +2,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from ..model_factory import get_model
 from .state import CodeReviewState
 import json
+from ..schemas import invoke_with_retry_llm
 
 
 OUTPUT_DIFF_PROMPT = """You are a code diff generator. Your job is to produce a clean unified diff based on the findings from a code review.
@@ -38,14 +39,20 @@ def output_formatter(state: CodeReviewState):
                 after_content=state['input'][-1]['content'],
                 simple_findings=json.dumps(simple_findings, indent=2, default=str)
             )
-            output_diff = output_diff_llm.invoke([
+
+            output_diff = invoke_with_retry_llm(
+                llm=output_diff_llm,
+                messages=[
                 SystemMessage("You are a code diff generator which produces clean unified diff based on findings of the code review."),
                 HumanMessage(prompt_diff)
-            ]).content
+                ]
+            ).content
 
         findings_json = json.dumps(findings, indent=2, default=str)
 
-        output_markdown = output_diff_llm.invoke([
+        output_markdown = invoke_with_retry_llm(
+            llm=output_diff_llm,
+            messages=[
             SystemMessage('You are a markdown generator which reads the findings of agents [JSON format] along with judge verdict and generates a structured output of the findings in markdown format.'),
             HumanMessage(
                 f"""
@@ -66,6 +73,9 @@ def output_formatter(state: CodeReviewState):
                 - Retry Count: {state['retry_count']}
                 - Forced Output: {state['forced']}
 
+                ## Cross-File Taint Flows
+                {state['cross_file_findings'] or "None"}
+
                 ## Unresolved imports from the Cross-Taint Analysis
                 - {state['unresolved_imports'] or "None"}
 
@@ -73,11 +83,18 @@ def output_formatter(state: CodeReviewState):
                 {findings_json}
 
                 ## NOTE:
-                If 'Unresolved imports from the Cross-Taint Analysis' section has some values, 
-                make sure to include a note that manual review of the unresolved imports is needed.
+                - If Cross-File Taint Flows exist, show the flow chain:
+                source_file:source_lineno (source_call)
+                    ↓
+                variable propagation (var_name)
+                    ↓
+                sink_file:sink_lineno
+
+                - If unresolved imports exist, mention that manual review is required.
                 """
             )
-        ]).content
+            ]
+        ).content
 
         return {
             'output_json': findings,

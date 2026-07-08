@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 from langchain_core.messages import HumanMessage, SystemMessage
 from ...model_factory import get_model
 from ..state import CodeReviewState, Finding, get_input_by_version, resolve_file_path
-
+from ...schemas import invoke_with_retry_llm
 
 class SecurityFinding(BaseModel):
     description: str = Field(description="Clear explanation of the vulnerability")
@@ -92,7 +92,7 @@ Identify any of the following vulnerabilities:
 
 ## Output Instructions
 For each vulnerability found, provide:
-- `description`: what the vulnerability is and why it is dangerous
+- `description`: what the vulnerability is, why it is dangerous, and source→sink flow if cross-file taint exists
 - `severity`: impact level
   - `critical`: exploitable without authentication, data breach risk
   - `high`: exploitable with minimal access, significant impact
@@ -145,11 +145,14 @@ def security_agent_node(state: CodeReviewState):
             retry_hints=retry_hints_str,
             past_findings=past_str
         )
-            
-        result = security_agent_llm.invoke([
+
+        result = invoke_with_retry_llm(
+            llm=security_agent_llm,
+            messages=[
             SystemMessage("You are a specialist security reviewer. Your job is to identify security vulnerabilities in a code diff and return structured findings."),
             HumanMessage(prompt)
-        ])
+            ]
+        )
 
         findings = [
             Finding(

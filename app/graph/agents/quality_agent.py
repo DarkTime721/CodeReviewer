@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 from langchain_core.messages import HumanMessage, SystemMessage
 from ...model_factory import get_model
 from ..state import CodeReviewState, Finding, get_input_by_version, resolve_file_path
-
+from ...schemas import invoke_with_retry_llm
 
 class QualityFinding(BaseModel):
     description: str = Field(description="Clear explanation of the issues")
@@ -117,10 +117,13 @@ def quality_agent_node(state: CodeReviewState):
             past_findings=past_str
         )
 
-        result = quality_agent_llm.invoke([
+        result = invoke_with_retry_llm(
+            llm=quality_agent_llm,
+            messages=[
             SystemMessage("You are a specialist code quality reviewer. Your job is to identify readability, maintainability, and structural issues in a code diff and return structured findings"),
             HumanMessage(prompt)
-        ])
+            ]
+        )
 
         findings = [
             Finding(

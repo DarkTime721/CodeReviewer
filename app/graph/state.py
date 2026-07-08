@@ -68,6 +68,14 @@ class CodeReviewState(TypedDict):
     # caller-supplied per run rather than generated like `id`.
 
     repo_id: Optional[str]
+
+    # Added for cross-file taint tracing to work using GitHub URLs instead of the system just relying on local paths
+    repo_url_fetch: Optional[str]
+
+    # Added for managing the imports if any [for cross-file taint tracking] using the SHA and GitHub API to provide the tree of the repo (every path)
+    repo_tree: Optional[set[str]]
+
+    head_sha: Optional[str]
     
     # Input
     input: Annotated[list[Input], operator.add]
@@ -113,6 +121,10 @@ class CodeReviewState(TypedDict):
     past_findings: Optional[dict[str, list[str]]]
     resolved_since_last: Optional[str]
     trend : Optional[Literal['improving', 'stable', 'degrading']]
+
+    # Added to avoid errors in case the main files to check have Syntax Error
+    # If the main file cannot be parsed, there is no use of calling any agent to check as the main file/code has a major flaw (SyntaxError)
+    parse_error: Optional[str]
 
     # Cross-file findings
     cross_file_findings: Optional[list[dict]]

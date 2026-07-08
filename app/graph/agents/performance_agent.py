@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field, field_validator
 from langchain_core.messages import HumanMessage, SystemMessage
 from ...model_factory import get_model
 from ..state import CodeReviewState, Finding, get_input_by_version, resolve_file_path
-
+from ...schemas import invoke_with_retry_llm
 
 class PerformanceFinding(BaseModel):
     description: str = Field(description="Clear explanation of the issue and the performance impact")
@@ -122,10 +122,13 @@ def performance_agent_node(state: CodeReviewState):
             past_findings=past_str
         )
         
-        result = performance_agent_llm.invoke([
+        result = invoke_with_retry_llm(
+            llm=performance_agent_llm,
+            messages=[
             SystemMessage("You are a specialist performance reviewer. Your job is to identify performance bottlenecks and inefficiencies in a code diff and return structured findings"),
             HumanMessage(prompt)
-        ])
+            ]
+        )
 
         findings = [
             Finding(

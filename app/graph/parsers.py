@@ -188,7 +188,20 @@ def ast_parser(state: CodeReviewState):
     
     prev_code = old_input['content'] if old_input else ''
     new_code = new_input['content']
-
+    
+    # Authoritative syntax check
+    try:
+        ast.parse(new_code)
+    except SyntaxError as e:
+        return {
+            'functions_added': [],
+            'functions_deleted': [],
+            'functions_modified': [],
+            'input_scanner': [],
+            'parse_error': f"File could not be parsed — invalid syntax at line {e.lineno}: {e.text.strip() if e.text else ''}"
+        }
+    
+    
     prev_funcs = _extract_functions(prev_code)
     new_funcs = _extract_functions(new_code)
 
