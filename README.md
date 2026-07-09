@@ -1,6 +1,6 @@
 # Code Reviewer
 
-A production-grade, multi-agent AI code review system built with **LangGraph**. It analyzes GitHub pull requests for bugs, security vulnerabilities, quality issues, and performance problems — including cross-file, cross-repo security vulnerability tracing — and returns a structured, confidence-scored review.
+A production-grade, multi-agent AI code review system built with **LangGraph**. It analyzes GitHub pull requests for bugs, security vulnerabilities, quality issues, and performance problems — including cross-file, security vulnerability tracing — and returns a structured, confidence-scored review.
 
 Fully containerized with Docker, with observability via LangSmith and persistent review memory via ChromaDB.
 
