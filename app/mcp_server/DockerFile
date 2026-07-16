@@ -1,0 +1,24 @@
+FROM python:3.12-slim
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+
+WORKDIR /repo
+
+# Copying mcp_server's dependency manifests first for layer caching
+COPY app/mcp_server/pyproject.toml app/mcp_server/uv.lock* ./app/mcp_server/
+RUN cd app/mcp_server && uv sync --frozen --no-dev
+
+# Copying the entire app package — graph, taint, mcp_server, and the
+# root-level shared modules (embeddings, model_factory, routers, memory, schemas)
+# that graph/taint/mcp_server all import from as siblings
+COPY app/ ./app/
+
+# stdio transport needs a clean, unbuffered stdout — no print() should exist,
+# but PYTHONUNBUFFERED protects against anything logging module doesn't catch
+ENV PYTHONUNBUFFERED=1
+
+# Tells python to include the '/repo' in its module search path for import resolution
+ENV PYTHONPATH=/repo
+
+WORKDIR /repo/app/mcp_server
+ENTRYPOINT [ "uv", "run", "python", "-m", "app.mcp_server.main" ]

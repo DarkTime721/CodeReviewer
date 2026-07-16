@@ -8,6 +8,9 @@ from urllib.parse import urlparse
 import time
 import groq
 import re
+import logging
+
+logger = logging.getLogger(__name__)
 
 load_dotenv()
 
@@ -137,7 +140,7 @@ def invoke_with_retry_llm(llm, messages, max_attempts=4):
                 # Failed regex match, waits for a default time of 5s
                 else:
                     error_time = 5
-                    print("Error time failed to extract")
+                    logger.debug("Error time failed to extract")
                 
 
             time.sleep(error_time)
@@ -297,7 +300,7 @@ def fetch_pr_files(owner: str, repo: str, pull_number: str) -> tuple[list[FileEn
                     continue
         
         else:
-            print("No files changed for this commit")
+            logger.debug("No files changed for this commit")
 
         # Returning the Head SHA instead of the Base SHA as Head SHA tracks the latest changes 
         # so we can get the present file structure (tree) from GitHub API

@@ -1,5 +1,7 @@
-__pycache__/
-.vscode/
-.env
-chroma/
-.git/
+**/__pycache__/
+**/*.pyc
+**/.venv/
+**/chroma/
+**/.env
+**/.git/
+**/node_modules/

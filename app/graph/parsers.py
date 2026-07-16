@@ -137,7 +137,7 @@ def diff_parser(state: CodeReviewState) -> dict:
     new_input = get_input_by_version(inputs, 'new')
 
     if new_input is None:
-        print(f"diff_parser: no 'new' version found among {len(inputs)} input(s) - skipping diff")
+        # print(f"diff_parser: no 'new' version found among {len(inputs)} input(s) - skipping diff")
         return {
             'lines_changed': 0,
             'percent_changed': 0.0,

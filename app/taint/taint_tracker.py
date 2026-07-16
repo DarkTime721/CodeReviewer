@@ -6,6 +6,9 @@ from .taint_patterns import source_patterns, sink_patterns
 from ..schemas import fetch_with_retry, github_token, GitHubPermanentError, ConfigurationError, GitHubAPIError
 import base64
 from typing import Optional
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 # Function added for fetching the required dependency files (from import) if present
@@ -61,15 +64,15 @@ def find_source_or_sink(c: tuple):
 
     for obj, attrs, trust in source_patterns:
         if (obj, attrs) == c:
-            print("Matched as Source", c, trust)
+            logger.debug("Matched as Source", c, trust)
             return {'type': 'source', 'score': trust}
 
     for obj, attrs, severity in sink_patterns:
         if (obj, attrs) == c:
-            print("Matched as Sink", c, severity)
+            logger.debug("Matched as Sink", c, severity)
             return {'type': 'sink', 'score': severity}
         
-    print("No match found")
+    logger.debug("No match found")
     return {'type': 'unknown', 'score': 0}
 
 
@@ -337,8 +340,18 @@ def cross_file_tracer_node(state: CodeReviewState) -> dict:
     new_input = get_input_by_version(state['input'], 'new')
 
     if new_input is None:
-        return {}
-    
+        return {
+        'cross_file_findings': [],
+        'unresolved_imports': []
+    }
+
+    file_ext = Path(new_input.get('file')).suffix.lower()
+    if file_ext != '.py':
+        return {
+        'cross_file_findings': [],
+        'unresolved_imports': []
+    }
+
     code = new_input['content']
     tree = ast.parse(code)
     for stmt in tree.body:

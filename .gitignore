@@ -10,7 +10,7 @@ venv/
 .idea/
 
 # Chroma
-/chroma
+chroma/
 
 # OS
 .DS_Store

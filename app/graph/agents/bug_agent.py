@@ -4,6 +4,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from ...model_factory import get_model
 from ..state import CodeReviewState, Finding, get_input_by_version, resolve_file_path
 from ...schemas import invoke_with_retry_llm
+import logging
+
+logger = logging.getLogger(__name__)
 
 class BugFinding(BaseModel):
     description: str = Field(description="Clear explanation of the bug")
@@ -151,5 +154,5 @@ def bug_agent_node(state: CodeReviewState):
         return {'findings': findings}
     
     except Exception as e:
-        print(e)
+        logger.debug(e)
         return {'findings': []}

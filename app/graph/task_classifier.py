@@ -4,6 +4,9 @@ from pydantic import BaseModel, Field, field_validator
 from langchain_core.messages import HumanMessage, SystemMessage
 from .state import CodeReviewState, get_input_by_version
 from ..schemas import invoke_with_retry_llm
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 class TaskClassifier(BaseModel):
@@ -24,25 +27,25 @@ class TaskClassifier(BaseModel):
     def filter_invalid_agents(cls, v):
         valid = {'bug', 'security', 'quality', 'performance'}
         if v is None:
-            print("TaskClassifier: agents_required missing, defaulting to ['bug']")
+            logger.debug("TaskClassifier: agents_required missing, defaulting to ['bug']")
             return ['bug']
         
         if isinstance(v, str):
             v = [v]
 
         if not isinstance(v, list):
-            print(f"TaskClassifier: invalid agents_required type {type(v)}, defaulting to ['bug']")
+            logger.debug(f"TaskClassifier: invalid agents_required type {type(v)}, defaulting to ['bug']")
             return ['bug']
         
         filtered = [a for a in v if a in valid]
 
         if not filtered:
-            print(f"TaskClassifier: all agents invalid, got {v}, defaulting to ['bug']")
+            logger.debug(f"TaskClassifier: all agents invalid, got {v}, defaulting to ['bug']")
             return ['bug']
         
         if len(filtered) < len(v):
             dropped = [a for a in v if a not in valid]
-            print(f"TaskClassifier: dropped invalid agents {dropped}")
+            logger.debug(f"TaskClassifier: dropped invalid agents {dropped}")
 
         return filtered
     
@@ -176,7 +179,7 @@ def task_classifier_node(state: CodeReviewState):
         }
     
     except Exception as e:
-        print(e)
+        logger.debug(e)
         return {
         'semantic_magnitude': 0.8,
         'agents_required': ['bug', 'security', 'quality', 'performance'],

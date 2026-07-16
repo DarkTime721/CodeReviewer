@@ -1,6 +1,9 @@
 import hashlib
 from .graph.state import CodeReviewState, get_input_by_version, resolve_file_path
 from .embeddings import client, collection
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 def collection_name_for_repo(repo_id: str) -> str:
@@ -18,7 +21,7 @@ embedding_fn = collection
 def memory_writer(state: CodeReviewState):
     repo_id = state.get('repo_id') or 'unscoped'
     if repo_id == 'unscoped':
-        print("memory_writer: no repo_id set — findings filed under shared 'unscoped' bucket")
+        logger.debug("memory_writer: no repo_id set — findings filed under shared 'unscoped' bucket")
 
     collection = client.get_or_create_collection(
         name=collection_name_for_repo(repo_id),
@@ -34,7 +37,7 @@ def memory_writer(state: CodeReviewState):
             metadatas=[{"type": "manifest", "repo_id": repo_id}]
         )
     except Exception as e:
-        print(f"memory_writer: manifest upsert failed: {e}")
+        logger.debug(f"memory_writer: manifest upsert failed: {e}")
     
     final_findings = state.get('final_findings') or []
     if not final_findings:
@@ -55,7 +58,7 @@ def memory_writer(state: CodeReviewState):
     try:
         collection.add(ids=ids, documents=documents, metadatas=metadatas)
     except Exception as e:
-        print(f"memory_writer: failed to write findings for run {state['id']}: {e}")
+        logger.debug(f"memory_writer: failed to write findings for run {state['id']}: {e}")
     
 
 def memory_reader(state: CodeReviewState):
@@ -75,7 +78,7 @@ def memory_reader(state: CodeReviewState):
 
         results = collection.get(where={"file_path": current_file})
     except Exception as e:
-        print(f"memory_reader: lookup failed: {e}")
+        logger.debug(f"memory_reader: lookup failed: {e}")
         return {'previously_found': None}
     
     documents = results.get('documents', [])

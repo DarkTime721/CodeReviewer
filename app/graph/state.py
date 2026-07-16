@@ -66,7 +66,6 @@ class CodeReviewState(TypedDict):
     # collection name in memory_writer / memory_reader. Set this at invoke 
     # time — start_node deliberately does NOT reset this field, since it's
     # caller-supplied per run rather than generated like `id`.
-
     repo_id: Optional[str]
 
     # Added for cross-file taint tracing to work using GitHub URLs instead of the system just relying on local paths
