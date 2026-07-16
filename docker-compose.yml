@@ -45,4 +45,19 @@ services:
               count: all
               capabilities: [gpu]
 
-    
+  mcp-server:
+    build:
+      context: .
+      dockerfile: app/mcp_server/DockerFile
+    stdin_open: true
+    tty: false
+    env_file:
+      - .env
+    environment:
+      - CHROMA_DB_PATH=/app/chroma
+      - OLLAMA_BASE_URL=http://ollama:11434
+    volumes:
+      - chroma_data:/app/chroma
+    depends_on:
+      ollama:
+        condition: service_healthy
