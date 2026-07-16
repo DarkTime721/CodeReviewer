@@ -259,7 +259,6 @@ Dockerfile
 - [x] GitHub PR API integration — automatic fetching of PR diffs, file contents, and cross-repo imports, replacing manual file copying
 - [x] **MCP server** — `review_pr` and `check_cross_file_taint` exposed as MCP tools, containerized and verified end-to-end via Claude Desktop
 - [ ] Model-aware prompt optimization to reduce token usage by dynamically adjusting prompt complexity based on the selected model, improving efficiency for high-token code review runs.
-- [ ] GitHub Action for automatic PR review
 - [ ] **Frontend** — lightweight UI for submitting a PR link and viewing streamed review output
 - [ ] QLoRA fine-tuning exploration
 
