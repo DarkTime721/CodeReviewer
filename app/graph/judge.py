@@ -4,6 +4,9 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from ..model_factory import get_model
 from .state import CodeReviewState
 from ..schemas import invoke_with_retry_llm
+import logging
+
+logger = logging.getLogger(__name__)
 
 class JudgeOutput(BaseModel):
     coverage: float = Field(ge=0.0, le=1.0, description="How well did agents cover all changed functions and lines")
@@ -144,7 +147,7 @@ def judge_node(state: CodeReviewState):
     }
 
     except Exception as e:
-        print(e)
+        logger.debug(e)
         return {
             'coverage': 0.0,
             'accuracy': 0.0,

@@ -3,7 +3,9 @@ from ..model_factory import get_model
 from .state import CodeReviewState
 import json
 from ..schemas import invoke_with_retry_llm
+import logging
 
+logger = logging.getLogger(__name__)
 
 OUTPUT_DIFF_PROMPT = """You are a code diff generator. Your job is to produce a clean unified diff based on the findings from a code review.
 
@@ -97,13 +99,13 @@ def output_formatter(state: CodeReviewState):
         ).content
 
         return {
-            'output_json': findings,
+            'output_json': findings_json,
             'output_diff': output_diff,
             'output_markdown': output_markdown
         }
 
     except Exception as e:
-        print(e)
+        logger.debug(e)
         return {
             'output_json': "Error occured while generating findings",
             'output_diff': "Error occured while generating findings",

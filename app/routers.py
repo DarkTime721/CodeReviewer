@@ -8,7 +8,6 @@ def agent_dispatcher(state: CodeReviewState):
 
 def confidence_router(state: CodeReviewState):
     agents_required = state['agents_required']
-    print(agents_required)
     semantic_magnitude = state['semantic_magnitude']
     routes = []
 
